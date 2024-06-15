@@ -1,0 +1,17 @@
+version: '3.9'
+
+services:
+  postgres:
+    build: 
+      dockerfile: ./postgres/Dockerfile
+    restart: always
+    container_name: lct_postgres_db
+    environment:
+      POSTGRES_USER: lct_guest
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: lct_postgres_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - ./postgres/container_data/db:/var/lib/postgresql/data
+
