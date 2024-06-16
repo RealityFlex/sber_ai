@@ -1,7 +1,7 @@
 import time
 from celery import Celery
 from celery.result import AsyncResult
-from utils.distributed_bills import distribute_bills
+from utils.distributed_bills import distribute_bills, distribute_predicted_bills
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from utils.upload_data import _delete_data
@@ -27,4 +27,12 @@ def celery_use_filter(self, id_distr_returnable,user_name, bills_link):
     _delete_data(SessionLocal, user_name)
     Base.metadata.create_all(engine)
     res = distribute_bills(SessionLocal, user_name, bills_link, self.request.id)
+    return {"id":id_distr_returnable, "user_name":user_name, "result":res}
+
+@celery.task(bind=True)
+def celery_use_another_filter(self, id_distr_returnable,user_name, bills_link):
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    _delete_data(SessionLocal, user_name)
+    Base.metadata.create_all(engine)
+    res = distribute_predicted_bills(SessionLocal, user_name, bills_link, self.request.id)
     return {"id":id_distr_returnable, "user_name":user_name, "result":res}

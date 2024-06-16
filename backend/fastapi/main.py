@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 import logging
+import asyncio
 from utils.distributed_bills import distribute_bills
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -46,6 +47,20 @@ def get_distributed_bills(id_distr_returnable: str, user_name: str, bills_link: 
         "task_id": task.id
     }
 
+@app.get("/distributed_predict_bills")
+def get_distributed_predict_bills(id_distr_returnable: str, user_name: str, bills_link: str):
+    task = celery_use_filter.delay(id_distr_returnable, user_name, bills_link)
+    return {
+        "task_id": task.id
+    }
+
+# @app.get("/distributed_predicted_bills")
+# def get_distributed_bills(id_distr_returnable: str, user_name: str, bills_link: str):
+#     task = celery_use_filter.delay(id_distr_returnable, user_name, bills_link)
+#     return {
+#         "task_id": task.id
+#     }
+
 # @app.get("/delete")
 # def delete_data():
 #     return _delete_data(SessionLocal, "qwe")
@@ -63,15 +78,7 @@ async def task_status(task_id: str):
             "result": get_progress(task_id=task_id)
         }
     elif task.state != 'FAILURE':
-        res = task.result
-        if "sub" in res and "df_name" in res:
-            asyncio.create_task(load_data(res['sub'],res['df_name']))
-            response = {
-                "status": task.state,
-                "result": task.result
-            }
-        else:
-            response = {
+        response = {
                 "status": task.state,
                 "result": task.result
             }
