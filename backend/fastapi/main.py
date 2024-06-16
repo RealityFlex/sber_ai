@@ -1,11 +1,12 @@
 from fastapi import FastAPI, HTTPException
 import logging
+import asyncio
 from utils.distributed_bills import distribute_bills
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from utils.upload_data import _delete_data
 from repository.db import Base
-from utils.tasks import celery_use_filter, get_res
+from utils.tasks import celery_use_filter, celery_use_another_filter, get_res
 app = FastAPI()
 
 # DATABASE_URL = "postgresql://lct_guest:postgres@62.109.8.64:9559/lct_postgres_db"
@@ -45,6 +46,20 @@ def get_distributed_bills(id_distr_returnable: str, user_name: str, bills_link: 
     return {
         "task_id": task.id
     }
+
+@app.get("/distributed_predict_bills")
+def get_distributed_predict_bills(id_distr_returnable: str, user_name: str, bills_link: str):
+    task = celery_use_another_filter.delay(id_distr_returnable, user_name, bills_link)
+    return {
+        "task_id": task.id
+    }
+
+# @app.get("/distributed_predicted_bills")
+# def get_distributed_bills(id_distr_returnable: str, user_name: str, bills_link: str):
+#     task = celery_use_filter.delay(id_distr_returnable, user_name, bills_link)
+#     return {
+#         "task_id": task.id
+#     }
 
 # @app.get("/delete")
 # def delete_data():
