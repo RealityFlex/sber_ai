@@ -13,6 +13,7 @@ import json
 import utils.mini as mini
 from utils.upload_data import _load_service_classes, _load_contract_building_relationship, _load_fixed_assets, _delete_data
 import warnings
+import requests
 with warnings.catch_warnings():
     warnings.simplefilter(action='ignore', category=EncodingWarning)
 
@@ -22,26 +23,26 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 
 
 model = CatBoostClassifier()      # parameters not required.
-model.load_model('../../ml-models/main_bills_predict.cbm')
-cool_encoder = load('../../ml-models/main_bill_encoder.joblib')
-cluster_encoder = load('../../ml-models/cluster_encoder.joblib')
+model.load_model('ml-models/main_bills_predict.cbm')
+cool_encoder = load('ml-models/main_bill_encoder.joblib')
+cluster_encoder = load('ml-models/cluster_encoder.joblib')
 
 service_class_cluster_model = CatBoostClassifier()
-service_class_cluster_model.load_model('../../ml-models/service_class_cluster_model.cbm')
+service_class_cluster_model.load_model('ml-models/service_class_cluster_model.cbm')
 
 # Функция распределяет счета
-def distribute_bills(SessionLocal: sessionmaker, user_name: str, bills_link: str):
+def distribute_bills(SessionLocal: sessionmaker, user_name: str, bills_link: str, task_id):
     with SessionLocal() as session:
         _load_service_classes(SessionLocal, user_name),
         _load_contract_building_relationship(SessionLocal, user_name),
         _load_fixed_assets(SessionLocal, user_name)
 
-        bills = pd.read_excel(mini.presigned_get_object('user-tabels',f'{user_name}/bills/low_data.xlsx'))
+        bills = pd.read_excel(mini.presigned_get_object('user-tabels',f'{user_name}/bills/low.xlsx')).head(5000)
         distributed_columns = _get_distributed_columns()
 
-        _distribute_bills_by_building(session, user_name, bills, "distributed_bills.xlsx")
+        _distribute_bills_by_building(session, user_name, bills, "distributed_bills.xlsx", task_id)
         new_bills = predict_future_bills(session, bills)
-        _distribute_bills_by_building(session, user_name, new_bills, "distributed_bills_predict.xlsx")
+        _distribute_bills_by_building(session, user_name, new_bills, "distributed_bills_predict.xlsx", task_id)
         # по каждому договору получать все здания
         # по каждому зданию получать все основные средства
         _delete_data(SessionLocal, user_name)
@@ -73,7 +74,7 @@ def predict_future_bills(session, dataframe):
     print(output_df)
     model = CatBoostRegressor()
     cool_dataframe = pd.DataFrame(output_df)
-    model.load_model('../../ml-models/predict_future_current_best_WTF.cbm')
+    model.load_model('ml-models/predict_future_current_best_WTF.cbm')
     y_pred = model.predict(cool_dataframe)
     if y_pred.min() < 0:
         y_pred = y_pred + y_pred.min() * (-1)
@@ -100,11 +101,13 @@ def predict_main_bill(data_for_predict: dict) -> int:
 
 
 # Функция распределяет счета 
-def _distribute_bills_by_building(session, user_name: str, bills: pd.DataFrame, file_name) -> str:
+def _distribute_bills_by_building(session, user_name: str, bills: pd.DataFrame, file_name, task_id) -> str:
     distributed_bills = []
-    with progressbar.ProgressBar(max_value=bills.shape[0]) as bar:
+    max_value_l = bills.shape[0]
+    with progressbar.ProgressBar(max_value=max_value_l) as bar:
         for idx_row, row in bills.iterrows():
-            bar.update(idx_row)      
+            bar.update(idx_row)
+            requests.get(f"http://62.109.8.64:8288/result?task_id={task_id}&curent={idx_row}&max={max_value_l}")
             _contract_id = row["ID договора"]
             #list_contracts = contracts_relationship.query("`ID договора` == @_contract_id")
             list_contracts = session.query(ContractRelationship).filter(ContractRelationship.contract_id == _contract_id).all()

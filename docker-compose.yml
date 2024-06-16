@@ -1,17 +1,42 @@
-version: '3.9'
+version: '3.8'
 
 services:
-  postgres:
-    build: 
-      dockerfile: ./postgres/Dockerfile
+
+  ai:
+    build: ./backend/fastapi
+    # image: shureck/sber-auth:latest
     restart: always
-    container_name: lct_postgres_db
-    environment:
-      POSTGRES_USER: lct_guest
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: lct_postgres_db
+    command: uvicorn main:app --host 0.0.0.0 --port 8001
     ports:
-      - '5432:5432'
-    volumes:
-      - ./postgres/container_data/db:/var/lib/postgresql/data
+      - 8288:8001
+
+  celery:
+    build: ./backend/fastapi
+    # image: shureck/sber-auth:latest
+    restart: always
+    command: celery -A utils.tasks:celery worker --loglevel=info
+    ports:
+      - 9828:8001
+
+  flower:
+    build: ./backend/fastapi
+    # image: shureck/sber-auth:latest
+    restart: always
+    command: celery -A utils.tasks:celery flower
+    ports:
+      - 5555:5555
+
+  # postgres:
+  #   build: 
+  #     dockerfile: ./postgres/Dockerfile
+  #   restart: always
+  #   container_name: lct_postgres_db
+  #   environment:
+  #     POSTGRES_USER: lct_guest
+  #     POSTGRES_PASSWORD: postgres
+  #     POSTGRES_DB: lct_postgres_db
+  #   ports:
+  #     - '5432:5432'
+  #   volumes:
+  #     - ./postgres/container_data/db:/var/lib/postgresql/data
 
