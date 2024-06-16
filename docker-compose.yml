@@ -26,17 +26,19 @@ services:
     ports:
       - 5555:5555
 
-  # postgres:
-  #   build: 
-  #     dockerfile: ./postgres/Dockerfile
-  #   restart: always
-  #   container_name: lct_postgres_db
-  #   environment:
-  #     POSTGRES_USER: lct_guest
-  #     POSTGRES_PASSWORD: postgres
-  #     POSTGRES_DB: lct_postgres_db
-  #   ports:
-  #     - '5432:5432'
-  #   volumes:
-  #     - ./postgres/container_data/db:/var/lib/postgresql/data
+  postgres:
+    # build: 
+    #   dockerfile: ./postgres/Dockerfile
+    image: postgres:14
+    restart: always
+    container_name: lct_postgres_ai
+    environment:
+      POSTGRES_USER: lct_guest
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: lct_postgres_db
+    ports:
+      - '5433:5432'
+    volumes:
+      - ./postgres/container_data/db:/var/lib/postgresql/data
+      - /postgres/init.sql:/docker-entrypoint-initdb.d/
 

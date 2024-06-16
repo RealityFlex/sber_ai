@@ -52,7 +52,7 @@ def get_distributed_bills(id_distr_returnable: str, user_name: str, bills_link: 
 
 @app.get("/result")
 def result(task_id, curent:int, max:int):
-    progress[task_id] = round(curent/max,2)
+    progress[task_id] = round(curent/max*100,2)
 
 @app.get('/task_status/{task_id}')
 async def task_status(task_id: str):

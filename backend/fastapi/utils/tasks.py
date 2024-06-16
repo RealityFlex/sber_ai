@@ -7,12 +7,13 @@ from sqlalchemy.orm import sessionmaker
 from utils.upload_data import _delete_data
 from repository.db import Base
 import json
+from sqlalchemy.orm import Session
 
 # tb.init()
-DATABASE_URL = "postgresql://lct_guest:postgres@62.109.8.64:9559/lct_postgres_db"
+DATABASE_URL = "postgresql://lct_guest:postgres@postgres:5432/lct_postgres_db"
 
 engine = create_engine(DATABASE_URL)
-
+Base.metadata.create_all(engine)
 celery = Celery('tasks', broker='redis://62.109.8.64:6377', backend='redis://62.109.8.64:6377')
 celery.conf.broker_connection_retry_on_startup = True
 
