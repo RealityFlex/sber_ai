@@ -9,6 +9,8 @@ services:
     command: uvicorn main:app --host 0.0.0.0 --port 8001
     ports:
       - 8288:8001
+    # networks:
+    #   - sber-network
 
   celery:
     build: ./backend/fastapi
@@ -17,6 +19,8 @@ services:
     command: celery -A utils.tasks:celery worker --loglevel=info
     ports:
       - 9828:8001
+    # networks:
+    #   - sber-network
 
   flower:
     build: ./backend/fastapi
@@ -25,6 +29,8 @@ services:
     command: celery -A utils.tasks:celery flower
     ports:
       - 5555:5555
+    # networks:
+    #   - sber-network
 
   postgres:
     # build: 
@@ -41,4 +47,10 @@ services:
     volumes:
       - ./postgres/container_data/db:/var/lib/postgresql/data
       - /postgres/init.sql:/docker-entrypoint-initdb.d/
+    # networks:
+    #   - sber-network
 
+
+# networks:
+#   sber-network:
+#     driver: bridge

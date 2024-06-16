@@ -63,15 +63,7 @@ async def task_status(task_id: str):
             "result": get_progress(task_id=task_id)
         }
     elif task.state != 'FAILURE':
-        res = task.result
-        if "sub" in res and "df_name" in res:
-            asyncio.create_task(load_data(res['sub'],res['df_name']))
-            response = {
-                "status": task.state,
-                "result": task.result
-            }
-        else:
-            response = {
+        response = {
                 "status": task.state,
                 "result": task.result
             }
