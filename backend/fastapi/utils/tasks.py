@@ -22,7 +22,7 @@ async def get_res(id):
     return AsyncResult(id, app=celery)
 
 @celery.task(bind=True)
-def celery_use_filter(self, id_distr_returnable,user_name, bills_link):
+def celery_use_filter(self, id_distr_returnable, user_name, bills_link):
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     _delete_data(SessionLocal, user_name)
     Base.metadata.create_all(engine)
