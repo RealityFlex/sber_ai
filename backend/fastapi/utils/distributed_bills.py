@@ -37,7 +37,7 @@ def distribute_bills(SessionLocal: sessionmaker, user_name: str, bills_link: str
         _load_contract_building_relationship(SessionLocal, user_name),
         _load_fixed_assets(SessionLocal, user_name)
 
-        bills = pd.read_excel(mini.presigned_get_object('user-tabels',f'{user_name}/bills/low.xlsx')).head(5000)
+        bills = pd.read_excel(mini.presigned_get_object('user-tabels',f'{user_name}/filter/1.xlsx')).head(5000)
         distributed_columns = _get_distributed_columns()
 
         _distribute_bills_by_building(session, user_name, bills, "distributed_bills.xlsx", task_id)
