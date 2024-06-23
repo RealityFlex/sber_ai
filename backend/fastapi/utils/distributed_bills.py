@@ -151,11 +151,12 @@ def get_data_for_bar_graphs(distributed_bills: pd.DataFrame):
     for i in range(0, len(list_clusters)):
         current_data_entity = {
             "x": list_clusters[i],
-            "y": list_service_number[i]
+            "y": list_service_number[i],
+            "cluster_hint": clusters_buildings[i]
         }
         output_list.append(current_data_entity)
 
-    return {"data": output_list, "building_in_clusters": clusters_buildings}
+    return {"data": output_list}
     
 
 
@@ -251,7 +252,6 @@ def _distribute_bills_by_building(session, user_name: str, bills: pd.DataFrame, 
             # requests.get(f"http://62.109.8.64:8288/prog?task_id={task_id}&curent={idx_row}&max={max_value_l}")
             _contract_id = row["ID договора"]
             list_contracts = session.query(ContractRelationship).filter(ContractRelationship.contract_id == _contract_id).all()
-            
             if list_contracts and _check_dates(list_contracts[0].action_to, row["Дата отражения счета в учетной системе"]):
                 distributed_position = 1
                 for contract_relation in list_contracts:
@@ -283,7 +283,7 @@ def _distribute_bills_by_building(session, user_name: str, bills: pd.DataFrame, 
                             if sum_list <= 0 or (not main_asset.fixed_asset_used and not main_asset.fixed_asset_usage):
                                 new_distributed_bill["Сумма распределения"] = 0
                             else:
-                                new_distributed_bill["Сумма распределения"] = row['Стоимость без НДС'] * (new_distributed_bill["Площадь"] / sum_list)
+                                new_distributed_bill["Сумма распределения"] = pd.to_numeric(str(row['Стоимость без НДС']).replace(" ", "").replace(",", ".")) * (new_distributed_bill["Площадь"] / sum_list)
                             
                             new_distributed_bill["Счет главной книги"] = predict_main_bill(new_distributed_bill)
                             distributed_bills.append(new_distributed_bill)
