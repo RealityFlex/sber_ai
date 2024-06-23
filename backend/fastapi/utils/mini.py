@@ -64,6 +64,6 @@ def delete_file(bucket, sub, df_name, filename):
 
 def presigned_get_object(bucket, filepath):
     url = client.presigned_get_object(
-                bucket, filepath, expires=timedelta(hours=2)
+                bucket, filepath, expires=timedelta(days=7)
                 )
     return url

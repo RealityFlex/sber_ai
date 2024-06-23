@@ -59,6 +59,8 @@ def distribute_bills(SessionLocal: sessionmaker, user_name: str, bills_link: str
             res =  {
                 "distributed_bills": mini.presigned_get_object('user-tabels',f'{user_name}/result/distributed_bills.xlsx'),
                 "export_distributed_bills_csv": mini.presigned_get_object('user-tabels', f'{user_name}/result/distributed_bills.csv'),
+                "distributed_bills_predict": mini.presigned_get_object('user-tabels', f'distributed_predict.xlsx'),
+                "distributed_bills_predict_csv": mini.presigned_get_object('user-tabels', f'distributed_bills_predict.csv'),                
                 "donut_graph": donut_graph,
                 "dots_graph": dots_graph,
                 "bars_graph": bars_graph
