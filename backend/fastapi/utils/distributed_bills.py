@@ -14,11 +14,11 @@ import utils.mini as mini
 from utils.upload_data import _load_service_classes, _load_contract_building_relationship, _load_fixed_assets, _delete_data
 import warnings
 import requests
-
+import redis
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-
+r = redis.Redis(host='62.109.8.64', port=6377, db=0)
 
 model = CatBoostClassifier()      # parameters not required.
 model.load_model('ml-models/main_bills_predict.cbm')
@@ -30,68 +30,96 @@ service_class_cluster_model.load_model('ml-models/service_class_cluster_model.cb
 
 # Функция распределяет счета
 def distribute_bills(SessionLocal: sessionmaker, user_name: str, bills_link: str, task_id):
-    with SessionLocal() as session:
-        _load_service_classes(SessionLocal, user_name),
-        _load_contract_building_relationship(SessionLocal, user_name),
-        _load_fixed_assets(SessionLocal, user_name)
-
-        bills = pd.read_excel(mini.presigned_get_object('user-tabels',f'{user_name}/bills/low_data.xlsx'))
-        distributed_columns = _get_distributed_columns()
-
-        df_for_graphs =_distribute_bills_by_building(session, user_name, bills.head(1000), "distributed_bills.xlsx", task_id)
-        # new_bills = predict_future_bills(session, bills)
-        # _distribute_bills_by_building(session, user_name, new_bills, "distributed_bills_predict.xlsx", task_id)
-        # по каждому договору получать все здания
-        # по каждому зданию получать все основные средства
-        donut_graph = get_data_for_donut_graphs(df_for_graphs)
-        dots_graph = get_data_for_dot_graphs(df_for_graphs)
+    try:
+        with SessionLocal() as session:
+            print("ASD")
+            r.set(task_id, json.dumps({"status":"PENDING", "result":0}))
+            print("LINK", mini.presigned_get_object('user-tabels',f'{user_name}/filter/1.xlsx'))
+            _load_service_classes(SessionLocal, user_name),
+            _load_contract_building_relationship(SessionLocal, user_name),
+            _load_fixed_assets(SessionLocal, user_name)
+            bills = pd.read_excel(mini.presigned_get_object('user-tabels',f'{user_name}/filter/1.xlsx'))
+            print("1", bills.head())
+            distributed_columns = _get_distributed_columns()
+            print("2", distributed_columns)
+            df_for_graphs =_distribute_bills_by_building(session, user_name, bills.head(1000), "distributed_bills.xlsx", task_id)
+            print("3", df_for_graphs)
+            # new_bills = predict_future_bills(session, bills)
+            # _distribute_bills_by_building(session, user_name, new_bills, "distributed_bills_predict.xlsx", task_id)
+            # по каждому договору получать все здания
+            # по каждому зданию получать все основные средства
+            donut_graph = get_data_for_donut_graphs(df_for_graphs)
+            print("4", donut_graph)
+            dots_graph = get_data_for_dot_graphs(df_for_graphs)
+            print("5", dots_graph)
+            _delete_data(SessionLocal, user_name)
+            res =  {
+                "distributed_bills": mini.presigned_get_object('user-tabels',f'{user_name}/result/distributed_bills.xlsx'),
+                "export_distributed_bills_csv": mini.presigned_get_object('user-tabels', f'{user_name}/result/distributed_bills.csv'),
+                "donut_graph": donut_graph,
+                "dots_graph": dots_graph
+                }
+            print(6, res)
+            r.set(task_id, json.dumps({"status":"SUCCESS", "result": res}))
+            # requests.post(f"http://62.109.8.64:8288/result?task_id={task_id}", data=res)
+            return res
+    except Exception as e:
+        print("ERROR -- ", e)
+        r.set(task_id, json.dumps({"status":"FAILURE", "result": e}))
         _delete_data(SessionLocal, user_name)
-        return {
-            "distributed_bills": mini.presigned_get_object('user-tabels',f'{user_name}/result/distributed_bills.xlsx'),
-            "export_distributed_bills_csv": mini.presigned_get_object('user-tabels', f'{user_name}/result/distributed_bills.csv'),
-            "donut_graph": donut_graph,
-            "dots_graph": dots_graph
-            }
 
 def distribute_predicted_bills(SessionLocal: sessionmaker, user_name: str, bills_link: str, task_id):
-    with SessionLocal() as session:
-        _load_service_classes(SessionLocal, user_name),
-        _load_contract_building_relationship(SessionLocal, user_name),
-        _load_fixed_assets(SessionLocal, user_name)
+    try:
+        with SessionLocal() as session:
+            _load_service_classes(SessionLocal, user_name),
+            _load_contract_building_relationship(SessionLocal, user_name),
+            _load_fixed_assets(SessionLocal, user_name)
 
-        bills = pd.read_excel(mini.presigned_get_object('user-tabels',f'{user_name}/bills/low_data.xlsx'))
-        distributed_columns = _get_distributed_columns()
+            bills = pd.read_excel(mini.presigned_get_object('user-tabels',f'{user_name}/bills/low_data.xlsx'))
+            distributed_columns = _get_distributed_columns()
 
-        new_bills = predict_future_bills(session, bills.head(1000))
-        df_for_graphs = _distribute_bills_by_building(session, user_name, new_bills, "distributed_bills_predict.xlsx", task_id)
-        donut_graph = get_data_for_donut_graphs(df_for_graphs)
-        dots_graph = get_data_for_dot_graphs(df_for_graphs)
+            new_bills = predict_future_bills(session, bills.head(1000))
+            df_for_graphs = _distribute_bills_by_building(session, user_name, new_bills, "distributed_bills_predict.xlsx", task_id)
+            donut_graph = get_data_for_donut_graphs(df_for_graphs)
+            dots_graph = get_data_for_dot_graphs(df_for_graphs)
+            _delete_data(SessionLocal, user_name)
+        
+            return {
+                "distributed_bills": mini.presigned_get_object('user-tabels',f'{user_name}/result/distributed_bills_predict.xlsx'),
+                "export_distributed_bills_csv": mini.presigned_get_object('user-tabels', f'{user_name}/result/distributed_bills_predict.csv'),
+                "donut_graph": donut_graph,
+                "dots_graph": dots_graph
+            }
+    except Exception as e:
+        print("ERROR", e)
+        r.set(task_id, json.dumps({"status":"FAILURE", "result": e}))
         _delete_data(SessionLocal, user_name)
-    
-        return {
-            "distributed_bills": mini.presigned_get_object('user-tabels',f'{user_name}/result/distributed_bills_predict.xlsx'),
-            "export_distributed_bills_csv": mini.presigned_get_object('user-tabels', f'{user_name}/result/distributed_bills_predict.csv'),
-            "donut_graph": donut_graph,
-            "dots_graph": dots_graph
-        }
 
 def get_data_for_donut_graphs(distributed_bills: pd.DataFrame):
-    df_for_donut = distributed_bills
-    df_for_donut['Дата отражения в учетной системе'] = pd.to_datetime(df_for_donut['Дата отражения в учетной системе'], dayfirst=True)
-    df_for_donut['Месяц-Год'] = df_for_donut['Дата отражения в учетной системе'].dt.strftime('%m-%Y')
+        df_for_donut = distributed_bills
+        df_for_donut['Дата отражения в учетной системе'] = pd.to_datetime(df_for_donut['Дата отражения в учетной системе'], dayfirst=True)
+        df_for_donut['Месяц-Год'] = df_for_donut['Дата отражения в учетной системе'].dt.strftime('%m-%Y')
 
-    # Группировка данных по месяцу и году с суммированием
-    grouped_df = df_for_donut.groupby('Месяц-Год')['Сумма распределения'].sum().reset_index()
+        # Группировка данных по месяцу и году с суммированием
+        grouped_df = df_for_donut.groupby('Месяц-Год')['Сумма распределения'].sum().reset_index()
 
-    return {"data": grouped_df["Сумма распределения"], "labels": grouped_df["Месяц-Год"]}
+        return {"series": grouped_df["Сумма распределения"].to_list(), "labels": grouped_df["Месяц-Год"].to_list()}
 
 def get_data_for_dot_graphs(distributed_bills: pd.DataFrame):
     df_for_dots = distributed_bills
     df_grouped = df_for_dots.groupby('Услуга').agg({'Сумма распределения': 'sum', 'Позиция счета': 'count'}).reset_index()
     df_grouped = df_grouped.sort_values(by=['Позиция счета', 'Сумма распределения'], ascending=[False, False])
     sizes = df_grouped['Сумма распределения'] / df_for_dots['Сумма распределения'].mean()
+    output_dots = []
+    distribute_sum = df_grouped['Сумма распределения'].to_list()
+    index = df_grouped.index.to_list()
+    size = sizes.to_list()
+    for i in range(0, len(distribute_sum)):
+        new_temp_dict = {"x": index[i], "y": distribute_sum[i], "r": size[i]}
+        output_dots.append(new_temp_dict)
 
-    return {"index": df_grouped.index, "distribute_sum": df_grouped['Сумма распределения'], "size": sizes}
+    return output_dots
+
 
     
 
@@ -133,26 +161,26 @@ def predict_future_bills(session, dataframe):
 
 # Экспорт csv
 def _export_csv(export_dataframe: pd.DataFrame, file_name: str, user_name: str):
-    export_dataframe = export_dataframe[["Компания"
-                                         "Год счета"
-                                         "Номер счета"
-                                         "Позиция счета"
-                                         "Номер позиции распределения"
-                                         "Дата отражения в учетной системе"
-                                         "ID договора"
-                                         "Услуга"
-                                         "Класс услуги"
-                                         "Здание"
-                                         "Класс ОС"
-                                         "ID основного средства"
-                                         'Признак "Использование в основной деятельности'
-                                         'Признак "Способ использования"'
-                                         "Площадь"
-                                         "Сумма распределения"
+    export_dataframe = export_dataframe[["Компания",
+                                         "Год счета",
+                                         "Номер счета",
+                                         "Позиция счета",
+                                         "Номер позиции распределения",
+                                         "Дата отражения в учетной системе",
+                                         "ID договора",
+                                         "Услуга",
+                                         "Класс услуги",
+                                         "Здание",
+                                         "Класс ОС",
+                                         "ID основного средства",
+                                         'Признак "Использование в основной деятельности"',
+                                         'Признак "Способ использования"',
+                                         "Площадь",
+                                         "Сумма распределения",
                                          "Счет главной книги"
                                          ]] 
     export_dataframe = export_dataframe.rename(columns={'Класс услуги': 'ID услуги'})
-    export_dataframe = export_dataframe.rename(columns={'Признак "Использование в основной деятельности': 'Признак использования в основной деятель.'})
+    export_dataframe = export_dataframe.rename(columns={'Признак "Использование в основной деятельности"': 'Признак использования в основной деятель.'})
     export_dataframe = export_dataframe.rename(columns={'Признак "Способ использования"': 'Признак передачи в аренду'})
     export_dataframe.to_csv(file_name, index=False)
     with open(file_name, 'rb') as f:
@@ -179,71 +207,61 @@ def predict_main_bill(data_for_predict: dict) -> int:
 def _distribute_bills_by_building(session, user_name: str, bills: pd.DataFrame, file_name, task_id) -> str:
     distributed_bills = []
     max_value_l = bills.shape[0]
+    
     with progressbar.ProgressBar(max_value=max_value_l) as bar:
         for idx_row, row in bills.iterrows():
             bar.update(idx_row)
-            requests.get(f"http://62.109.8.64:8288/result?task_id={task_id}&curent={idx_row}&max={max_value_l}")
+            r.set(task_id, json.dumps({"status":"PENDING", "result": round(idx_row/max_value_l*100,2)}))
+            # r.set(task_id, str(round(idx_row/max_value_l*100,2)))
+            # requests.get(f"http://62.109.8.64:8288/prog?task_id={task_id}&curent={idx_row}&max={max_value_l}")
             _contract_id = row["ID договора"]
-            #list_contracts = contracts_relationship.query("`ID договора` == @_contract_id")
             list_contracts = session.query(ContractRelationship).filter(ContractRelationship.contract_id == _contract_id).all()
-            if len(list_contracts) > 0:
+            
+            if list_contracts:
                 distributed_position = 1
                 for contract_relation in list_contracts:
-                    current_distributed_bills = []
-                    #print(contract_relation[0])
-                    _current_building_id = contract_relation.building_id
-                    _current_service_id = row["ID услуги"]
-                    list_main_assets = session.query(FixedAssets).filter(FixedAssets.building_id == _current_building_id).all()
-                    if len(list_main_assets) > 0:
+                    list_main_assets = session.query(FixedAssets).filter(FixedAssets.building_id == contract_relation.building_id).all()
+                    
+                    if list_main_assets:
                         for main_asset in list_main_assets:
-                            new_distributed_bill = {}
-                            new_distributed_bill.setdefault("Компания", row["Компания"])
-                            new_distributed_bill.setdefault("Год счета", row["Год"])
-                            new_distributed_bill.setdefault("Номер счета", row["Номер счета"])
-                            new_distributed_bill.setdefault("Позиция счета", row["Позиция счета"])
-                            new_distributed_bill.setdefault("Номер позиции распределения", distributed_position)
-                            default_date = pd.to_datetime(row["Дата отражения счета в учетной системе"])
-                            if row["Дата отражения счета в учетной системе"] is None:
-                                default_date = "01.01.1900"
-                            new_distributed_bill.setdefault("Дата отражения в учетной системе", default_date)
-                            new_distributed_bill.setdefault("ID договора", contract_relation.contract_id)
-                            new_distributed_bill.setdefault("Услуга", row["ID услуги"])
-                            new_distributed_bill.setdefault("Здание", contract_relation.building_id)
-                            new_distributed_bill.setdefault("Класс ОС", main_asset.fixed_asset_class)
-                            new_distributed_bill.setdefault("Класс услуги", session.query(ServiceCodes).filter(ServiceCodes.service_id == _current_service_id).all()[0].service_class)
-                            new_distributed_bill.setdefault("ID основного средства", main_asset.fixed_asset_id)
-                            new_distributed_bill.setdefault('Признак "Использование в основной деятельности"', main_asset.fixed_asset_used)
-                            new_distributed_bill.setdefault('Признак "Способ использования"', main_asset.fixed_asset_usage)
-                            new_distributed_bill.setdefault("Площадь", session.query(FixedAssets).filter(FixedAssets.building_id == _current_building_id).first().fixed_asset_square)
-                            current_main_asset = session.query(FixedAssets).filter(FixedAssets.building_id == _current_building_id).all()
-                            list_of_squares = []
-                            for current_main_asset in current_main_asset:
-                                list_of_squares.append(current_main_asset.fixed_asset_square)
+                            new_distributed_bill = {
+                                "Компания": row["Компания"],
+                                "Год счета": row["Год"],
+                                "Номер счета": row["Номер счета"],
+                                "Позиция счета": row["Позиция счета"],
+                                "Номер позиции распределения": distributed_position,
+                                "Дата отражения в учетной системе": pd.to_datetime(row["Дата отражения счета в учетной системе"]) if pd.notna(row["Дата отражения счета в учетной системе"]) else pd.to_datetime("1900-01-01"),
+                                "ID договора": contract_relation.contract_id,
+                                "Услуга": row["ID услуги"],
+                                "Здание": contract_relation.building_id,
+                                "Класс ОС": main_asset.fixed_asset_class,
+                                "Класс услуги": session.query(ServiceCodes).filter(ServiceCodes.service_id == row["ID услуги"]).first().service_class,
+                                "ID основного средства": main_asset.fixed_asset_id,
+                                'Признак "Использование в основной деятельности"': main_asset.fixed_asset_used,
+                                'Признак "Способ использования"': main_asset.fixed_asset_usage,
+                                "Площадь": main_asset.fixed_asset_square
+                            }
+                            
+                            list_of_squares = [fa.fixed_asset_square for fa in session.query(FixedAssets).filter(FixedAssets.building_id == contract_relation.building_id).all()]
                             sum_list = sum(list_of_squares)
-
+                            
                             if sum_list <= 0 or (not main_asset.fixed_asset_used and not main_asset.fixed_asset_usage):
-                                new_distributed_bill.setdefault("Сумма распределения", 0)
+                                new_distributed_bill["Сумма распределения"] = 0
                             else:
-                                new_distributed_bill.setdefault("Сумма распределения", row['Стоимость без НДС'] * (new_distributed_bill["Площадь"] / (sum(list_of_squares))))
-                            new_distributed_bill.setdefault("Счет главной книги", predict_main_bill(new_distributed_bill))
+                                new_distributed_bill["Сумма распределения"] = row['Стоимость без НДС'] * (new_distributed_bill["Площадь"] / sum_list)
+                            
+                            new_distributed_bill["Счет главной книги"] = predict_main_bill(new_distributed_bill)
                             distributed_bills.append(new_distributed_bill)
                             distributed_position += 1
-                    #distributed_bills.append(current_distributed_bills)
-        cool_dataframe = pd.DataFrame()
-        for i in distributed_bills:
-            new_df = pd.DataFrame(i)
-            cool_dataframe = pd.concat([cool_dataframe, new_df], axis=0)
-        #cool_dataframe = pd.DataFrame(distributed_bills)
-        cool_dataframe.to_excel("distributed_bills.xlsx", index=False)
-        _export_csv(cool_dataframe, file_name, user_name)
-        with open('distributed_bills.xlsx', 'rb') as f:
-            mini.load_data_bytes('user-tabels',f'{user_name}/result/{file_name}', f.read())
-        # Преобразование списка словарей в датафрейм
-        # df = pd.DataFrame(list_of_dicts)
-
-        # Сохранение датафрейма в xlsx файл
-        #df.to_excel("output.xlsx", index=False)
-        return cool_dataframe
+    
+    cool_dataframe = pd.DataFrame(distributed_bills)
+    cool_dataframe.to_excel("distributed_bills.xlsx", index=False)
+    _export_csv(cool_dataframe, file_name, user_name)
+    
+    with open('distributed_bills.xlsx', 'rb') as f:
+        mini.load_data_bytes('user-tabels', f'{user_name}/result/{file_name}', f.read())
+    
+    return cool_dataframe
 
 def _get_distributed_columns() -> dict:
     return {
@@ -265,9 +283,3 @@ def _get_distributed_columns() -> dict:
         "Сумма распределения": "",	
         "Счет главной книги": "",
     }
-
-            
-
-
-
-
