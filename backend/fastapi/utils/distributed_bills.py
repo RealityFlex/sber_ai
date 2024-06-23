@@ -39,10 +39,12 @@ def distribute_bills(SessionLocal: sessionmaker, user_name: str, bills_link: str
             _load_contract_building_relationship(SessionLocal, user_name),
             _load_fixed_assets(SessionLocal, user_name)
             bills = pd.read_excel(mini.presigned_get_object('user-tabels',f'{user_name}/filter/1.xlsx'))
+            bills["Дата отражения счета в учетной системе"] = bills["Дата отражения счета в учетной системе"].apply(_replace_numbers_greater_than_44950)
+            bills["Дата отражения счета в учетной системе"] = bills["Дата отражения счета в учетной системе"].ffill()
             print("1", bills.head())
             distributed_columns = _get_distributed_columns()
             print("2", distributed_columns)
-            df_for_graphs =_distribute_bills_by_building(session, user_name, bills.head(1000), "distributed_bills.xlsx", task_id)
+            df_for_graphs =_distribute_bills_by_building(session, user_name, bills, "distributed_bills.xlsx", task_id)
             print("3", df_for_graphs)
             # new_bills = predict_future_bills(session, bills)
             # _distribute_bills_by_building(session, user_name, new_bills, "distributed_bills_predict.xlsx", task_id)
@@ -52,12 +54,14 @@ def distribute_bills(SessionLocal: sessionmaker, user_name: str, bills_link: str
             print("4", donut_graph)
             dots_graph = get_data_for_dot_graphs(df_for_graphs)
             print("5", dots_graph)
+            bars_graph = get_data_for_bar_graphs(df_for_graphs)
             _delete_data(SessionLocal, user_name)
             res =  {
                 "distributed_bills": mini.presigned_get_object('user-tabels',f'{user_name}/result/distributed_bills.xlsx'),
                 "export_distributed_bills_csv": mini.presigned_get_object('user-tabels', f'{user_name}/result/distributed_bills.csv'),
                 "donut_graph": donut_graph,
-                "dots_graph": dots_graph
+                "dots_graph": dots_graph,
+                "bars_graph": bars_graph
                 }
             print(6, res)
             r.set(task_id, json.dumps({"status":"SUCCESS", "result": res}))
@@ -78,17 +82,19 @@ def distribute_predicted_bills(SessionLocal: sessionmaker, user_name: str, bills
             bills = pd.read_excel(mini.presigned_get_object('user-tabels',f'{user_name}/bills/low_data.xlsx'))
             distributed_columns = _get_distributed_columns()
 
-            new_bills = predict_future_bills(session, bills.head(1000))
+            new_bills = predict_future_bills(session, bills)
             df_for_graphs = _distribute_bills_by_building(session, user_name, new_bills, "distributed_bills_predict.xlsx", task_id)
             donut_graph = get_data_for_donut_graphs(df_for_graphs)
             dots_graph = get_data_for_dot_graphs(df_for_graphs)
+            bars_graph = get_data_for_bar_graphs(df_for_graphs)
             _delete_data(SessionLocal, user_name)
         
             return {
                 "distributed_bills": mini.presigned_get_object('user-tabels',f'{user_name}/result/distributed_bills_predict.xlsx'),
                 "export_distributed_bills_csv": mini.presigned_get_object('user-tabels', f'{user_name}/result/distributed_bills_predict.csv'),
                 "donut_graph": donut_graph,
-                "dots_graph": dots_graph
+                "dots_graph": dots_graph,
+                "bars_graph": bars_graph
             }
     except Exception as e:
         print("ERROR", e)
@@ -120,7 +126,21 @@ def get_data_for_dot_graphs(distributed_bills: pd.DataFrame):
 
     return output_dots
 
+def get_data_for_bar_graphs(distributed_bills: pd.DataFrame):
+    df_for_bars = distributed_bills
 
+    # Группировка данных по зданиям и подсчет количества уникальных услуг
+    df_grouped = df_for_bars.groupby('Здание')['Услуга'].nunique().reset_index()
+
+    # Получение суммарной стоимости распределения для каждого здания
+    df_sum = df_for_bars.groupby('Здание')['Сумма распределения'].sum().reset_index()
+
+    # Объединение данных по зданиям
+    df_combined = pd.merge(df_grouped, df_sum, on='Здание')
+
+    # Сортировка зданий по возрастанию суммарной стоимости распределения
+    df_sorted = df_combined.sort_values(by='Сумма распределения')
+    return {"series": df_sorted["Услуга"].to_list(), "categories": df_sorted["Здание"].to_list()}
     
 
 
@@ -217,7 +237,7 @@ def _distribute_bills_by_building(session, user_name: str, bills: pd.DataFrame, 
             _contract_id = row["ID договора"]
             list_contracts = session.query(ContractRelationship).filter(ContractRelationship.contract_id == _contract_id).all()
             
-            if list_contracts:
+            if list_contracts and _check_dates(list_contracts[0].action_to, row["Дата отражения счета в учетной системе"]):
                 distributed_position = 1
                 for contract_relation in list_contracts:
                     list_main_assets = session.query(FixedAssets).filter(FixedAssets.building_id == contract_relation.building_id).all()
@@ -256,7 +276,8 @@ def _distribute_bills_by_building(session, user_name: str, bills: pd.DataFrame, 
     
     cool_dataframe = pd.DataFrame(distributed_bills)
     cool_dataframe.to_excel("distributed_bills.xlsx", index=False)
-    _export_csv(cool_dataframe, file_name, user_name)
+    csv_file_name = file_name.split(".")[0] + ".csv"
+    _export_csv(cool_dataframe, csv_file_name, user_name)
     
     with open('distributed_bills.xlsx', 'rb') as f:
         mini.load_data_bytes('user-tabels', f'{user_name}/result/{file_name}', f.read())
@@ -283,3 +304,24 @@ def _get_distributed_columns() -> dict:
         "Сумма распределения": "",	
         "Счет главной книги": "",
     }
+
+def _check_dates(date_contract: str, date_current: str) -> bool:
+    date_contract = str(date_contract).split(" ")[0]
+    date_current = str(date_current).split(" ")[0]
+    ### year-month-day year-month-day
+    cool_contract_date = date_contract.split("-")
+    cool_current_date = date_current.split("-")
+    if cool_contract_date[0] > cool_current_date[0]:
+        return True
+    elif cool_contract_date[1] > cool_current_date[1]:
+        return True
+    elif cool_contract_date[2] > cool_current_date[2]:
+        return True
+    else:
+        return False
+    
+# Функция для замены значений
+def _replace_numbers_greater_than_44950(val):
+    if isinstance(val, (int, float)) and val > 44950:
+        return np.nan
+    return val

@@ -34,3 +34,5 @@ archive.zip
 # macOS
 .DS_Store
 backend/xdxd.xlsx
+backend/fastapi/distributed_bills.csv
+backend/fastapi/distributed_bills.xlsx
