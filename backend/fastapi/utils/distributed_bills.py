@@ -14,6 +14,7 @@ import utils.mini as mini
 from utils.upload_data import _load_service_classes, _load_contract_building_relationship, _load_fixed_assets, _delete_data
 import warnings
 import requests
+from sklearn.cluster import KMeans
 import redis
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -41,6 +42,7 @@ def distribute_bills(SessionLocal: sessionmaker, user_name: str, bills_link: str
             bills = pd.read_excel(mini.presigned_get_object('user-tabels',f'{user_name}/filter/1.xlsx'))
             bills["Дата отражения счета в учетной системе"] = bills["Дата отражения счета в учетной системе"].apply(_replace_numbers_greater_than_44950)
             bills["Дата отражения счета в учетной системе"] = bills["Дата отражения счета в учетной системе"].ffill()
+            bills = bills.head(500)
             print("1", bills.head())
             distributed_columns = _get_distributed_columns()
             print("2", distributed_columns)
@@ -123,7 +125,7 @@ def get_data_for_dot_graphs(distributed_bills: pd.DataFrame):
     index = df_grouped.index.to_list()
     size = sizes.to_list()
     for i in range(0, len(distribute_sum)):
-        new_temp_dict = {"x": index[i], "y": distribute_sum[i], "r": size[i]}
+        new_temp_dict = {"name": df_grouped["Услуга"].to_list()[i], "data": {"x": index[i], "y": distribute_sum[i], "z": size[i]}}
         output_dots.append(new_temp_dict)
 
     return output_dots
@@ -131,18 +133,20 @@ def get_data_for_dot_graphs(distributed_bills: pd.DataFrame):
 def get_data_for_bar_graphs(distributed_bills: pd.DataFrame):
     df_for_bars = distributed_bills
 
-    # Группировка данных по зданиям и подсчет количества уникальных услуг
-    df_grouped = df_for_bars.groupby('Здание')['Услуга'].nunique().reset_index()
+    # Группировка данных по зданиям и подсчет количества услуг для каждого здания
+    df_grouped = df_for_bars.groupby('Здание').agg({'Услуга': 'count'}).reset_index()
+    df_grouped.columns = ['Здание', 'Количество услуг']
 
-    # Получение суммарной стоимости распределения для каждого здания
-    df_sum = df_for_bars.groupby('Здание')['Сумма распределения'].sum().reset_index()
+    # Применение кластеризации
+    kmeans = KMeans(n_clusters=25, random_state=0).fit(df_grouped[['Количество услуг']])
+    df_grouped['Кластер'] = kmeans.labels_
 
-    # Объединение данных по зданиям
-    df_combined = pd.merge(df_grouped, df_sum, on='Здание')
+    # Подсчет среднего количества услуг в каждом кластере
+    df_clustered = df_grouped.groupby('Кластер').agg({'Количество услуг': 'mean'}).reset_index()
+    # Вывод зданий для каждого кластера
+    clusters_buildings = df_grouped.groupby('Кластер')['Здание'].apply(list).to_dict()
 
-    # Сортировка зданий по возрастанию суммарной стоимости распределения
-    df_sorted = df_combined.sort_values(by='Сумма распределения')
-    return {"series": df_sorted["Услуга"].to_list(), "categories": df_sorted["Здание"].to_list()}
+    return {"labels": df_clustered['Кластер'].to_list(), "series": df_clustered['Количество услуг'].to_list(), "building_in_clusters": clusters_buildings}
     
 
 
@@ -277,7 +281,8 @@ def _distribute_bills_by_building(session, user_name: str, bills: pd.DataFrame, 
                             distributed_position += 1
     
     cool_dataframe = pd.DataFrame(distributed_bills)
-    cool_dataframe.to_excel("distributed_bills.xlsx", index=False)
+    string_dataframe = cool_dataframe.astype("str") 
+    string_dataframe.to_excel("distributed_bills.xlsx", index=False)
     csv_file_name = file_name.split(".")[0] + ".csv"
     _export_csv(cool_dataframe, csv_file_name, user_name)
     
@@ -313,11 +318,11 @@ def _check_dates(date_contract: str, date_current: str) -> bool:
     ### year-month-day year-month-day
     cool_contract_date = date_contract.split("-")
     cool_current_date = date_current.split("-")
-    if cool_contract_date[0] > cool_current_date[0]:
+    if int(cool_contract_date[0]) > int(cool_current_date[0]):
         return True
-    elif cool_contract_date[1] > cool_current_date[1]:
+    elif int(cool_contract_date[1]) > int(cool_current_date[1]):
         return True
-    elif cool_contract_date[2] > cool_current_date[2]:
+    elif int(cool_contract_date[2]) > int(cool_current_date[2]):
         return True
     else:
         return False
