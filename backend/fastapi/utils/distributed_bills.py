@@ -42,7 +42,6 @@ def distribute_bills(SessionLocal: sessionmaker, user_name: str, bills_link: str
             bills = pd.read_excel(mini.presigned_get_object('user-tabels',f'{user_name}/filter/1.xlsx'))
             bills["Дата отражения счета в учетной системе"] = bills["Дата отражения счета в учетной системе"].apply(_replace_numbers_greater_than_44950)
             bills["Дата отражения счета в учетной системе"] = bills["Дата отражения счета в учетной системе"].ffill()
-            bills = bills.head(500)
             print("1", bills.head())
             distributed_columns = _get_distributed_columns()
             print("2", distributed_columns)
@@ -145,8 +144,18 @@ def get_data_for_bar_graphs(distributed_bills: pd.DataFrame):
     df_clustered = df_grouped.groupby('Кластер').agg({'Количество услуг': 'mean'}).reset_index()
     # Вывод зданий для каждого кластера
     clusters_buildings = df_grouped.groupby('Кластер')['Здание'].apply(list).to_dict()
+    output_list = []
+    current_data_entity = {}
+    list_clusters = df_clustered['Кластер'].to_list()
+    list_service_number = df_clustered['Количество услуг'].to_list()
+    for i in range(0, len(list_clusters)):
+        current_data_entity = {
+            "x": list_clusters[i],
+            "y": list_service_number[i]
+        }
+        output_list.append(current_data_entity)
 
-    return {"labels": df_clustered['Кластер'].to_list(), "series": df_clustered['Количество услуг'].to_list(), "building_in_clusters": clusters_buildings}
+    return {"data": output_list, "building_in_clusters": clusters_buildings}
     
 
 
