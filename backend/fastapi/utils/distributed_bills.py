@@ -259,35 +259,36 @@ def _distribute_bills_by_building(session, user_name: str, bills: pd.DataFrame, 
                     
                     if list_main_assets:
                         for main_asset in list_main_assets:
-                            new_distributed_bill = {
-                                "Компания": row["Компания"],
-                                "Год счета": row["Год"],
-                                "Номер счета": row["Номер счета"],
-                                "Позиция счета": row["Позиция счета"],
-                                "Номер позиции распределения": distributed_position,
-                                "Дата отражения в учетной системе": pd.to_datetime(row["Дата отражения счета в учетной системе"]) if pd.notna(row["Дата отражения счета в учетной системе"]) else pd.to_datetime("1900-01-01"),
-                                "ID договора": contract_relation.contract_id,
-                                "Услуга": row["ID услуги"],
-                                "Здание": contract_relation.building_id,
-                                "Класс ОС": main_asset.fixed_asset_class,
-                                "Класс услуги": session.query(ServiceCodes).filter(ServiceCodes.service_id == row["ID услуги"]).first().service_class,
-                                "ID основного средства": main_asset.fixed_asset_id,
-                                'Признак "Использование в основной деятельности"': main_asset.fixed_asset_used,
-                                'Признак "Способ использования"': main_asset.fixed_asset_usage,
-                                "Площадь": main_asset.fixed_asset_square
-                            }
-                            
-                            list_of_squares = [fa.fixed_asset_square for fa in session.query(FixedAssets).filter(FixedAssets.building_id == contract_relation.building_id).all()]
-                            sum_list = sum(list_of_squares)
-                            
-                            if sum_list <= 0 or (not main_asset.fixed_asset_used and not main_asset.fixed_asset_usage):
-                                new_distributed_bill["Сумма распределения"] = 0
-                            else:
-                                new_distributed_bill["Сумма распределения"] = pd.to_numeric(str(row['Стоимость без НДС']).replace(" ", "").replace(",", ".")) * (new_distributed_bill["Площадь"] / sum_list)
-                            
-                            new_distributed_bill["Счет главной книги"] = predict_main_bill(new_distributed_bill)
-                            distributed_bills.append(new_distributed_bill)
-                            distributed_position += 1
+                            if _check_dates(main_asset.action_to, row["Дата отражения счета в учетной системе"]):
+                                new_distributed_bill = {
+                                    "Компания": row["Компания"],
+                                    "Год счета": row["Год"],
+                                    "Номер счета": row["Номер счета"],
+                                    "Позиция счета": row["Позиция счета"],
+                                    "Номер позиции распределения": distributed_position,
+                                    "Дата отражения в учетной системе": pd.to_datetime(row["Дата отражения счета в учетной системе"]) if pd.notna(row["Дата отражения счета в учетной системе"]) else pd.to_datetime("1900-01-01"),
+                                    "ID договора": contract_relation.contract_id,
+                                    "Услуга": row["ID услуги"],
+                                    "Здание": contract_relation.building_id,
+                                    "Класс ОС": main_asset.fixed_asset_class,
+                                    "Класс услуги": session.query(ServiceCodes).filter(ServiceCodes.service_id == row["ID услуги"]).first().service_class,
+                                    "ID основного средства": main_asset.fixed_asset_id,
+                                    'Признак "Использование в основной деятельности"': main_asset.fixed_asset_used,
+                                    'Признак "Способ использования"': main_asset.fixed_asset_usage,
+                                    "Площадь": main_asset.fixed_asset_square
+                                }
+                                
+                                list_of_squares = [fa.fixed_asset_square for fa in session.query(FixedAssets).filter(FixedAssets.building_id == contract_relation.building_id).all()]
+                                sum_list = sum(list_of_squares)
+                                
+                                if sum_list <= 0 or (not main_asset.fixed_asset_used and not main_asset.fixed_asset_usage):
+                                    new_distributed_bill["Сумма распределения"] = 0
+                                else:
+                                    new_distributed_bill["Сумма распределения"] = pd.to_numeric(str(row['Стоимость без НДС']).replace(" ", "").replace(",", ".")) * (new_distributed_bill["Площадь"] / sum_list)
+                                
+                                new_distributed_bill["Счет главной книги"] = predict_main_bill(new_distributed_bill)
+                                distributed_bills.append(new_distributed_bill)
+                                distributed_position += 1
     
     cool_dataframe = pd.DataFrame(distributed_bills)
     string_dataframe = cool_dataframe.astype("str") 
