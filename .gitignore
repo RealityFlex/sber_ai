@@ -36,3 +36,4 @@ archive.zip
 backend/xdxd.xlsx
 backend/fastapi/distributed_bills.csv
 backend/fastapi/distributed_bills.xlsx
+backend/fastapi/utils/predict_distributed_response.json
