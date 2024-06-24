@@ -22,6 +22,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 r = redis.Redis(host='62.109.8.64', port=6377, db=0)
 
 model = CatBoostClassifier()      # parameters not required.
+
 model.load_model('ml-models/main_bills_predict.cbm')
 cool_encoder = load('ml-models/main_bill_encoder.joblib')
 cluster_encoder = load('ml-models/cluster_encoder.joblib')
@@ -36,9 +37,13 @@ def distribute_bills(SessionLocal: sessionmaker, user_name: str, bills_link: str
             print("ASD")
             r.set(task_id, json.dumps({"status":"PENDING", "result":0}))
             print("LINK", mini.presigned_get_object('user-tabels',f'{user_name}/filter/1.xlsx'))
+            r.set(task_id, json.dumps({"status":"PENDING", "result": 1}))
             _load_service_classes(SessionLocal, user_name),
+            r.set(task_id, json.dumps({"status":"PENDING", "result": 2}))
             _load_contract_building_relationship(SessionLocal, user_name),
+            r.set(task_id, json.dumps({"status":"PENDING", "result": 3}))
             _load_fixed_assets(SessionLocal, user_name)
+            r.set(task_id, json.dumps({"status":"PENDING", "result": 4}))
             bills = pd.read_excel(mini.presigned_get_object('user-tabels',f'{user_name}/filter/1.xlsx'))
             bills["Дата отражения счета в учетной системе"] = bills["Дата отражения счета в учетной системе"].apply(_replace_numbers_greater_than_44950)
             bills["Дата отражения счета в учетной системе"] = bills["Дата отражения счета в учетной системе"].ffill()

@@ -87,9 +87,12 @@ async def run_in_thread(id_distr_returnable, user_name, bills_link):
 #         "task_id": task.id
 #     }
 
-# @app.get("/delete")
-# def delete_data():
-#     return _delete_data(SessionLocal, "qwe")
+@app.get("/delete")
+def delete_data(user):
+    DATABASE_URL = "postgresql://lct_guest:postgres@62.109.8.64:5433/lct_postgres_db"
+    engine = create_engine(DATABASE_URL)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    return _delete_data(SessionLocal, user)
 
 @app.get("/prog")
 def prog(task_id, curent:int, max:int):
